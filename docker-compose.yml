@@ -8,54 +8,77 @@ services:
       - internal_network
     healthcheck:
       test: ['CMD', 'pg_isready', '-U', 'postgres']
+    secrets:
+      - source: postgres_database
+      - source: postgres_password
+      - source: postgres_user
     volumes:
-      - ./postgres14:/var/lib/postgresql/data
+      #- ./postgres14:/var/lib/postgresql/data
+      - postgres:/var/lib/postgresql/data
     environment:
-      - 'POSTGRES_HOST_AUTH_METHOD=trust'
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB_FILE=/run/secrets/postgres_database
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      #- POSTGRES_HOST_AUTH_METHOD=trust
 
   redis:
     restart: always
-    image: redis:7-alpine
+    build: ./redis
+    #image: redis:7-alpine
     networks:
       - internal_network
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
+    deploy:
+      restart_policy:
+        max_attempts: 5
+        window: 30s
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: '8G'
+          pids: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     volumes:
-      - ./redis:/data
+      - redis:/data
 
-  # es:
-  #   restart: always
-  #   image: docker.elastic.co/elasticsearch/elasticsearch:7.17.4
-  #   environment:
-  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m -Des.enforce.bootstrap.checks=true"
-  #     - "xpack.license.self_generated.type=basic"
-  #     - "xpack.security.enabled=false"
-  #     - "xpack.watcher.enabled=false"
-  #     - "xpack.graph.enabled=false"
-  #     - "xpack.ml.enabled=false"
-  #     - "bootstrap.memory_lock=true"
-  #     - "cluster.name=es-mastodon"
-  #     - "discovery.type=single-node"
-  #     - "thread_pool.write.queue_size=1000"
-  #   networks:
-  #      - external_network
-  #      - internal_network
-  #   healthcheck:
-  #      test: ["CMD-SHELL", "curl --silent --fail localhost:9200/_cluster/health || exit 1"]
-  #   volumes:
-  #      - ./elasticsearch:/usr/share/elasticsearch/data
-  #   ulimits:
-  #     memlock:
-  #       soft: -1
-  #       hard: -1
-  #     nofile:
-  #       soft: 65536
-  #       hard: 65536
-  #   ports:
-  #     - '127.0.0.1:9200:9200'
+  es:
+    restart: always
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.4
+    environment:
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m -Des.enforce.bootstrap.checks=true"
+      - "xpack.license.self_generated.type=basic"
+      - "xpack.security.enabled=false"
+      - "xpack.watcher.enabled=false"
+      - "xpack.graph.enabled=false"
+      - "xpack.ml.enabled=false"
+      - "bootstrap.memory_lock=true"
+      - "cluster.name=es-mastodon"
+      - "discovery.type=single-node"
+      - "thread_pool.write.queue_size=1000"
+    networks:
+       - external_network
+       - internal_network
+    healthcheck:
+       test: ["CMD-SHELL", "curl --silent --fail localhost:9200/_cluster/health || exit 1"]
+    volumes:
+       - elasticsearch:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+  # ports:
+  #   - '127.0.0.1:9200:9200'
 
   web:
-    build: .
+    #build: .
     image: tootsuite/mastodon
     restart: always
     env_file: .env.production
@@ -66,17 +89,18 @@ services:
     healthcheck:
       # prettier-ignore
       test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:3000/health || exit 1']
-    ports:
-      - '127.0.0.1:3000:3000'
+    #ports:
+      #- '127.0.0.1:3000:3000'
     depends_on:
       - db
       - redis
       # - es
     volumes:
-      - ./public/system:/mastodon/public/system
+      #- ./public/system:/mastodon/public/system
+      - public:/mastodon/public
 
   streaming:
-    build: .
+    #build: .
     image: tootsuite/mastodon
     restart: always
     env_file: .env.production
@@ -87,14 +111,14 @@ services:
     healthcheck:
       # prettier-ignore
       test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:4000/api/v1/streaming/health || exit 1']
-    ports:
-      - '127.0.0.1:4000:4000'
+    #ports:
+      #- '127.0.0.1:4000:4000'
     depends_on:
       - db
       - redis
 
   sidekiq:
-    build: .
+    #build: .
     image: tootsuite/mastodon
     restart: always
     env_file: .env.production
@@ -106,9 +130,45 @@ services:
       - external_network
       - internal_network
     volumes:
-      - ./public/system:/mastodon/public/system
+      #- ./public/system:/mastodon/public/system
+      - public:/mastodon/public
     healthcheck:
       test: ['CMD-SHELL', "ps aux | grep '[s]idekiq\ 6' || false"]
+
+  nginx:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mastodon.rule=Host(`social.nerdnet.ovh`)"
+      - "traefik.http.routers.mastodon.entrypoints=websecure"
+      - "traefik.http.routers.mastodon.tls.certresolver=tlschallenge"
+      - "traefik.http.routers.mastodon.tls.domains[0].main=social.nerdnet.ovh"
+      - "traefik.http.services.mastodon.loadbalancer.server.port=8080"
+    build: ./nginx
+    deploy:
+      restart_policy:
+        max_attempts: 5
+        window: 30s
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: '2G'
+          pids: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    volumes:
+      #- ./public:/mastodon/public
+      - public:/mastodon/public
+    tmpfs:
+      - /var/cache/nginx:mode=1777,uid=101,gid=101
+      - /var/run:mode=1777,uid=101,gid=101
+    depends_on:
+      - web
+    networks:
+      - traefik-servicenet
+      - external_network
 
   ## Uncomment to enable federation with tor instances along with adding the following ENV variables
   ## http_proxy=http://privoxy:8118
@@ -127,7 +187,24 @@ services:
   #     - external_network
   #     - internal_network
 
+volumes:
+  postgres:
+  redis:
+  elasticsearch:
+  public:
+
+secrets:
+  postgres_database:
+    file: "./.secrets/postgres_database"
+  postgres_user:
+    file: "./.secrets/postgres_user"
+  postgres_password:
+    file: "./.secrets/postgres_password"
+
 networks:
   external_network:
   internal_network:
     internal: true
+  traefik-servicenet:
+    external: true           # this network has to be created once before starting:
+    name: traefik-servicenet # docker network create traefik-servicenet

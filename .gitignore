@@ -41,7 +41,7 @@
 # Ignore postgres + redis + elasticsearch volume optionally created by docker-compose
 /postgres
 /postgres14
-/redis
+/redis-data
 /elasticsearch
 
 # Ignore Apple files
@@ -63,3 +63,5 @@ yarn-debug.log
 
 # Ignore Docker option files
 docker-compose.override.yml
+
+.secrets
