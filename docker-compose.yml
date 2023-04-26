@@ -150,6 +150,7 @@ services:
       - "traefik.http.routers.mastodon.middlewares=secHeaders@file"
       - "traefik.http.services.mastodon.loadbalancer.server.port=8080"
     build: ./nginx
+    restart: always
     deploy:
       restart_policy:
         max_attempts: 5
