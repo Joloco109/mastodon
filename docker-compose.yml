@@ -56,25 +56,29 @@ services:
     restart: always
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.4
     environment:
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m -Des.enforce.bootstrap.checks=true"
-      - "xpack.license.self_generated.type=basic"
-      - "xpack.security.enabled=false"
-      - "xpack.watcher.enabled=false"
-      - "xpack.graph.enabled=false"
-      - "xpack.ml.enabled=false"
-      - "bootstrap.memory_lock=true"
-      - "cluster.name=es-mastodon"
-      - "discovery.type=single-node"
-      - "thread_pool.write.queue_size=1000"
+      - 'ES_JAVA_OPTS=-Xms512m -Xmx512m -Des.enforce.bootstrap.checks=true'
+      - 'xpack.license.self_generated.type=basic'
+      - 'xpack.security.enabled=false'
+      - 'xpack.watcher.enabled=false'
+      - 'xpack.graph.enabled=false'
+      - 'xpack.ml.enabled=false'
+      - 'bootstrap.memory_lock=true'
+      - 'cluster.name=es-mastodon'
+      - 'discovery.type=single-node'
+      - 'thread_pool.write.queue_size=1000'
     networks:
-       external_network:
+      external_network:
         aliases:
           - es.social.nerdnet.ovh
-       internal_network:
+      internal_network:
         aliases:
           - es.social.nerdnet.ovh
     healthcheck:
-       test: ["CMD-SHELL", "curl --silent --fail localhost:9200/_cluster/health || exit 1"]
+      test:
+        [
+          'CMD-SHELL',
+          'curl --silent --fail localhost:9200/_cluster/health || exit 1',
+        ]
     volumes:
       - elasticsearch:/usr/share/elasticsearch/data
       - /etc/localtime:/etc/localtime:ro
@@ -105,7 +109,7 @@ services:
       # prettier-ignore
       test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:3000/health || exit 1']
     #ports:
-      #- '127.0.0.1:3000:3000'
+    #- '127.0.0.1:3000:3000'
     depends_on:
       - db
       - redis
@@ -132,7 +136,7 @@ services:
       # prettier-ignore
       test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:4000/api/v1/streaming/health || exit 1']
     #ports:
-      #- '127.0.0.1:4000:4000'
+    #- '127.0.0.1:4000:4000'
     depends_on:
       - db
       - redis
@@ -162,13 +166,13 @@ services:
 
   nginx:
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.mastodon.rule=Host(`social.nerdnet.ovh`)"
-      - "traefik.http.routers.mastodon.entrypoints=websecure"
-      - "traefik.http.routers.mastodon.tls.certresolver=tlschallenge"
-      - "traefik.http.routers.mastodon.tls.domains[0].main=social.nerdnet.ovh"
-      - "traefik.http.routers.mastodon.middlewares=secHeaders@file"
-      - "traefik.http.services.mastodon.loadbalancer.server.port=8080"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.mastodon.rule=Host(`social.nerdnet.ovh`)'
+      - 'traefik.http.routers.mastodon.entrypoints=websecure'
+      - 'traefik.http.routers.mastodon.tls.certresolver=tlschallenge'
+      - 'traefik.http.routers.mastodon.tls.domains[0].main=social.nerdnet.ovh'
+      - 'traefik.http.routers.mastodon.middlewares=secHeaders@file'
+      - 'traefik.http.services.mastodon.loadbalancer.server.port=8080'
     build: ./nginx
     restart: always
     deploy:
@@ -228,16 +232,16 @@ volumes:
 
 secrets:
   postgres_database:
-    file: "./.secrets/postgres_database"
+    file: './.secrets/postgres_database'
   postgres_user:
-    file: "./.secrets/postgres_user"
+    file: './.secrets/postgres_user'
   postgres_password:
-    file: "./.secrets/postgres_password"
+    file: './.secrets/postgres_password'
 
 networks:
   external_network:
   internal_network:
     internal: true
   traefik-servicenet:
-    external: true           # this network has to be created once before starting:
+    external: true # this network has to be created once before starting:
     name: traefik-servicenet # docker network create traefik-servicenet
