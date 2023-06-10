@@ -5,7 +5,9 @@ services:
     image: postgres:14-alpine
     shm_size: 256mb
     networks:
-      - internal_network
+      internal_network:
+        aliases:
+          - db.social.nerdnet.ovh
     healthcheck:
       test: ['CMD', 'pg_isready', '-U', 'postgres']
     secrets:
@@ -27,7 +29,9 @@ services:
     build: ./redis
     #image: redis:7-alpine
     networks:
-      - internal_network
+      internal_network:
+        aliases:
+          - redis.social.nerdnet.ovh
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
     deploy:
@@ -63,8 +67,12 @@ services:
       - "discovery.type=single-node"
       - "thread_pool.write.queue_size=1000"
     networks:
-       - external_network
-       - internal_network
+       external_network:
+        aliases:
+          - es.social.nerdnet.ovh
+       internal_network:
+        aliases:
+          - es.social.nerdnet.ovh
     healthcheck:
        test: ["CMD-SHELL", "curl --silent --fail localhost:9200/_cluster/health || exit 1"]
     volumes:
@@ -87,8 +95,12 @@ services:
     env_file: .env.production
     command: bash -c "rm -f /mastodon/tmp/pids/server.pid; bundle exec rails s -p 3000"
     networks:
-      - external_network
-      - internal_network
+      external_network:
+        aliases:
+          - web.social.nerdnet.ovh
+      internal_network:
+        aliases:
+          - web.social.nerdnet.ovh
     healthcheck:
       # prettier-ignore
       test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:3000/health || exit 1']
@@ -110,8 +122,12 @@ services:
     env_file: .env.production
     command: node ./streaming
     networks:
-      - external_network
-      - internal_network
+      external_network:
+        aliases:
+          - streaming.social.nerdnet.ovh
+      internal_network:
+        aliases:
+          - streaming.social.nerdnet.ovh
     healthcheck:
       # prettier-ignore
       test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:4000/api/v1/streaming/health || exit 1']
@@ -131,8 +147,12 @@ services:
       - db
       - redis
     networks:
-      - external_network
-      - internal_network
+      external_network:
+        aliases:
+          - sidekiq.social.nerdnet.ovh
+      internal_network:
+        aliases:
+          - sidekiq.social.nerdnet.ovh
     volumes:
       #- ./public/system:/mastodon/public/system
       - public:/mastodon/public
@@ -174,9 +194,14 @@ services:
       - /var/run:mode=1777,uid=101,gid=101
     depends_on:
       - web
+    hostname: social
     networks:
-      - traefik-servicenet
-      - external_network
+      traefik-servicenet:
+        aliases:
+          - social.nerdnet.ovh
+      external_network:
+        aliases:
+          - nginx.social.nerdnet.ovh
 
   ## Uncomment to enable federation with tor instances along with adding the following ENV variables
   ## http_proxy=http://privoxy:8118
@@ -184,16 +209,16 @@ services:
   # tor:
   #   image: sirboops/tor
   #   networks:
-  #      - external_network
-  #      - internal_network
+  #      external_network:
+  #      internal_network:
   #
   # privoxy:
   #   image: sirboops/privoxy
   #   volumes:
   #     - ./priv-config:/opt/config
   #   networks:
-  #     - external_network
-  #     - internal_network
+  #     external_network:
+  #     internal_network:
 
 volumes:
   postgres:
