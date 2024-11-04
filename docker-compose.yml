@@ -7,65 +7,104 @@ services:
     image: postgres:14-alpine
     shm_size: 256mb
     networks:
-      - internal_network
+      internal_network:
+        aliases:
+          - db.social.nerdnet.ovh
     healthcheck:
       test: ['CMD', 'pg_isready', '-U', 'postgres']
+    secrets:
+      - source: postgres_database
+      - source: postgres_password
+      - source: postgres_user
     volumes:
-      - ./postgres14:/var/lib/postgresql/data
+      #- ./postgres14:/var/lib/postgresql/data
+      - postgres:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
     environment:
-      - 'POSTGRES_HOST_AUTH_METHOD=trust'
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB_FILE=/run/secrets/postgres_database
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      #- POSTGRES_HOST_AUTH_METHOD=trust
 
   redis:
     restart: always
-    image: redis:7-alpine
+    build: ./redis
+    #image: redis:7-alpine
     networks:
-      - internal_network
+      internal_network:
+        aliases:
+          - redis.social.nerdnet.ovh
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: '8G'
+          pids: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     volumes:
-      - ./redis:/data
+      - redis:/data
+      - /etc/localtime:/etc/localtime:ro
 
-  # es:
-  #   restart: always
-  #   image: docker.elastic.co/elasticsearch/elasticsearch:7.17.4
-  #   environment:
-  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m -Des.enforce.bootstrap.checks=true"
-  #     - "xpack.license.self_generated.type=basic"
-  #     - "xpack.security.enabled=false"
-  #     - "xpack.watcher.enabled=false"
-  #     - "xpack.graph.enabled=false"
-  #     - "xpack.ml.enabled=false"
-  #     - "bootstrap.memory_lock=true"
-  #     - "cluster.name=es-mastodon"
-  #     - "discovery.type=single-node"
-  #     - "thread_pool.write.queue_size=1000"
-  #   networks:
-  #      - external_network
-  #      - internal_network
-  #   healthcheck:
-  #      test: ["CMD-SHELL", "curl --silent --fail localhost:9200/_cluster/health || exit 1"]
-  #   volumes:
-  #      - ./elasticsearch:/usr/share/elasticsearch/data
-  #   ulimits:
-  #     memlock:
-  #       soft: -1
-  #       hard: -1
-  #     nofile:
-  #       soft: 65536
-  #       hard: 65536
-  #   ports:
-  #     - '127.0.0.1:9200:9200'
+  es:
+    restart: always
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.17
+    environment:
+      - 'ES_JAVA_OPTS=-Xms512m -Xmx512m -Des.enforce.bootstrap.checks=true'
+      - 'xpack.license.self_generated.type=basic'
+      - 'xpack.security.enabled=false'
+      - 'xpack.watcher.enabled=false'
+      - 'xpack.graph.enabled=false'
+      - 'xpack.ml.enabled=false'
+      - 'bootstrap.memory_lock=true'
+      - 'cluster.name=es-mastodon'
+      - 'discovery.type=single-node'
+      - 'thread_pool.write.queue_size=1000'
+    networks:
+      external_network:
+        aliases:
+          - es.social.nerdnet.ovh
+      internal_network:
+        aliases:
+          - es.social.nerdnet.ovh
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'curl --silent --fail localhost:9200/_cluster/health || exit 1',
+        ]
+    volumes:
+      - elasticsearch:/usr/share/elasticsearch/data
+      - /etc/localtime:/etc/localtime:ro
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+  # ports:
+  #   - '127.0.0.1:9200:9200'
 
   web:
     # You can uncomment the following line if you want to not use the prebuilt image, for example if you have local code changes
     # build: .
-    image: ghcr.io/mastodon/mastodon:v4.3.0
+    image: ghcr.io/mastodon/mastodon:v4.3
     restart: always
     env_file: .env.production
     command: bundle exec puma -C config/puma.rb
     networks:
-      - external_network
-      - internal_network
+      external_network:
+        aliases:
+          - web.social.nerdnet.ovh
+      internal_network:
+        aliases:
+          - web.social.nerdnet.ovh
     healthcheck:
       # prettier-ignore
       test: ['CMD-SHELL',"curl -s --noproxy localhost localhost:3000/health | grep -q 'OK' || exit 1"]
@@ -76,20 +115,26 @@ services:
       - redis
       # - es
     volumes:
-      - ./public/system:/mastodon/public/system
+      #- ./public/system:/mastodon/public/system
+      - public:/mastodon/public
+      - /etc/localtime:/etc/localtime:ro
 
   streaming:
     # You can uncomment the following lines if you want to not use the prebuilt image, for example if you have local code changes
     # build:
     #   dockerfile: ./streaming/Dockerfile
     #   context: .
-    image: ghcr.io/mastodon/mastodon-streaming:v4.3.0
+    image: ghcr.io/mastodon/mastodon-streaming:v4.3
     restart: always
     env_file: .env.production
     command: node ./streaming/index.js
     networks:
-      - external_network
-      - internal_network
+      external_network:
+        aliases:
+          - streaming.social.nerdnet.ovh
+      internal_network:
+        aliases:
+          - streaming.social.nerdnet.ovh
     healthcheck:
       # prettier-ignore
       test: ['CMD-SHELL', "curl -s --noproxy localhost localhost:4000/api/v1/streaming/health | grep -q 'OK' || exit 1"]
@@ -100,8 +145,8 @@ services:
       - redis
 
   sidekiq:
-    build: .
-    image: ghcr.io/mastodon/mastodon:v4.3.0
+    # build: .
+    image: ghcr.io/mastodon/mastodon:v4.3
     restart: always
     env_file: .env.production
     command: bundle exec sidekiq
@@ -109,12 +154,58 @@ services:
       - db
       - redis
     networks:
-      - external_network
-      - internal_network
+      external_network:
+        aliases:
+          - sidekiq.social.nerdnet.ovh
+      internal_network:
+        aliases:
+          - sidekiq.social.nerdnet.ovh
     volumes:
-      - ./public/system:/mastodon/public/system
+      #- ./public/system:/mastodon/public/system
+      - public:/mastodon/public
+      - /etc/localtime:/etc/localtime:ro
     healthcheck:
       test: ['CMD-SHELL', "ps aux | grep '[s]idekiq\ 6' || false"]
+
+  nginx:
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.mastodon.rule=Host(`social.nerdnet.ovh`)'
+      - 'traefik.http.routers.mastodon.entrypoints=websecure'
+      - 'traefik.http.routers.mastodon.tls.certresolver=tlschallenge'
+      - 'traefik.http.routers.mastodon.tls.domains[0].main=social.nerdnet.ovh'
+      - 'traefik.http.routers.mastodon.middlewares=secHeaders@file'
+      - 'traefik.http.services.mastodon.loadbalancer.server.port=8080'
+    build: ./nginx
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: '2G'
+          pids: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    volumes:
+      #- ./public:/mastodon/public
+      - public:/mastodon/public
+      - /etc/localtime:/etc/localtime:ro
+    tmpfs:
+      - /var/cache/nginx:mode=1777,uid=101,gid=101
+      - /var/run:mode=1777,uid=101,gid=101
+    depends_on:
+      - web
+    hostname: social
+    networks:
+      traefik-servicenet:
+        aliases:
+          - social.nerdnet.ovh
+      external_network:
+        aliases:
+          - nginx.social.nerdnet.ovh
 
   ## Uncomment to enable federation with tor instances along with adding the following ENV variables
   ## http_hidden_proxy=http://privoxy:8118
@@ -122,18 +213,35 @@ services:
   # tor:
   #   image: sirboops/tor
   #   networks:
-  #      - external_network
-  #      - internal_network
+  #      external_network:
+  #      internal_network:
   #
   # privoxy:
   #   image: sirboops/privoxy
   #   volumes:
   #     - ./priv-config:/opt/config
   #   networks:
-  #     - external_network
-  #     - internal_network
+  #     external_network:
+  #     internal_network:
+
+volumes:
+  postgres:
+  redis:
+  elasticsearch:
+  public:
+
+secrets:
+  postgres_database:
+    file: './.secrets/postgres_database'
+  postgres_user:
+    file: './.secrets/postgres_user'
+  postgres_password:
+    file: './.secrets/postgres_password'
 
 networks:
   external_network:
   internal_network:
     internal: true
+  traefik-servicenet:
+    external: true # this network has to be created once before starting:
+    name: traefik-servicenet # docker network create traefik-servicenet

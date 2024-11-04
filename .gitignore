@@ -37,7 +37,7 @@
 # Ignore postgres + redis + elasticsearch volume optionally created by docker-compose
 /postgres
 /postgres14
-/redis
+/redis-data
 /elasticsearch
 
 # Ignore Apple files
@@ -74,3 +74,6 @@ docker-compose.override.yml
 
 # Ignore local-only rspec configuration
 .rspec-local
+
+.secrets
+
