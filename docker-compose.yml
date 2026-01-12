@@ -94,7 +94,7 @@ services:
   web:
     # You can uncomment the following line if you want to not use the prebuilt image, for example if you have local code changes
     # build: .
-    image: ghcr.io/mastodon/mastodon:v4.3
+    image: ghcr.io/mastodon/mastodon:v4.5.4
     restart: always
     env_file: .env.production
     command: bundle exec puma -C config/puma.rb
@@ -113,10 +113,14 @@ services:
     depends_on:
       - db
       - redis
-      # - es
+      - es
     volumes:
-      #- ./public/system:/mastodon/public/system
-      - public:/mastodon/public
+      # - ./public/system:/mastodon/public/system
+      - type: volume
+        source: public
+        target: /mastodon/public/system
+        volume:
+          subpath: system
       - /etc/localtime:/etc/localtime:ro
 
   streaming:
@@ -124,8 +128,7 @@ services:
     # build:
     #   dockerfile: ./streaming/Dockerfile
     #   context: .
-    image: ghcr.io/mastodon/mastodon-streaming:v4.3
-    # image: ghcr.io/mastodon/mastodon:v4.3
+    image: ghcr.io/mastodon/mastodon-streaming:v4.5.4
     restart: always
     env_file: .env.production
     command: node ./streaming/index.js
@@ -147,7 +150,7 @@ services:
 
   sidekiq:
     # build: .
-    image: ghcr.io/mastodon/mastodon:v4.3
+    image: ghcr.io/mastodon/mastodon:v4.5.4
     restart: always
     env_file: .env.production
     command: bundle exec sidekiq
@@ -163,7 +166,11 @@ services:
           - sidekiq.social.nerdnet.ovh
     volumes:
       #- ./public/system:/mastodon/public/system
-      - public:/mastodon/public
+      - type: volume
+        source: public
+        target: /mastodon/public/system
+        volume:
+          subpath: system
       - /etc/localtime:/etc/localtime:ro
     healthcheck:
       test: ['CMD-SHELL', "ps aux | grep '[s]idekiq\ 6' || false"]
